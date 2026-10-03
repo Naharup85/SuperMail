@@ -29,6 +29,13 @@
       "when": 1790191227139,
       "tag": "0003_unusual_daredevil",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790645901978,
+      "tag": "0004_unique_star_brand",
+      "breakpoints": true
     }
   ]
 }
