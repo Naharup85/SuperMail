@@ -9,7 +9,7 @@ export async function ensureCorsairTenant(userId: string) {
 
   try {
     return await corsairClient.tenants.get(tenantId);
-  } catch (error) {
+  } catch {
     return corsairClient.tenants.create({
       id: tenantId,
     });
