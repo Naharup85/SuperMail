@@ -16,7 +16,7 @@ export function Landing({ signInAction }: LandingProps) {
       setIsSigningIn(true);
       await signInAction();
     } catch {
-      router.push("/api/auth/signin");
+      window.location.href = "/auth/signin";
     }
   };
 

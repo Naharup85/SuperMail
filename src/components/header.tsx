@@ -66,17 +66,17 @@ export function Header({
       setIsSigningOut(true);
       await signOutAction();
     } catch {
-      router.push("/api/auth/signout");
+      window.location.href = "/auth/signout";
     }
   };
 
   const userInitials = user?.name
     ? user.name
-        .split(" ")
-        .map((n) => n[0])
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
+      .split(" ")
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase()
     : user?.email?.[0]?.toUpperCase() || "U";
 
   return (
@@ -179,11 +179,10 @@ export function Header({
             type="button"
             onClick={onOpenAI}
             title="Open AI Assistant"
-            className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-all ${
-              isAIOpen
+            className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-all ${isAIOpen
                 ? "border-indigo-500/60 bg-indigo-500/20 text-indigo-200 shadow-md shadow-indigo-500/20"
                 : "border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:border-indigo-500/40 hover:bg-zinc-900 hover:text-indigo-300"
-            }`}
+              }`}
           >
             <svg
               className="h-3.5 w-3.5 text-indigo-400"
