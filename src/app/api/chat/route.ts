@@ -83,8 +83,8 @@ export async function POST(req: Request) {
     // 4. Derive tenantId strictly from authenticated session
     const tenantId = getTenantId(session.user.id);
 
-    // 5. Build Corsair tools scoped to this tenant with READ-ONLY whitelist
-    const tools = buildAgentTools(tenantId);
+    // 5. Build tools scoped to this tenant and authenticated user
+    const tools = buildAgentTools(tenantId, session.user.id);
 
     // 6. Convert messages to AI SDK model message representation
     const modelMessages = await convertToModelMessages(messages);

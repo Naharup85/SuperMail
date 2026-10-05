@@ -3,6 +3,8 @@
 import React from "react";
 import type { UIMessage } from "ai";
 import { ToolActivity } from "./tool-activity";
+import { ActionConfirmationCard } from "./action-confirmation-card";
+import type { ActionPreparationResult } from "@/types/agent-actions";
 
 interface ChatMessageProps {
   message: UIMessage;
@@ -147,13 +149,13 @@ export function ChatMessage({ message, userImage, userName }: ChatMessageProps) 
           </span>
           {!isUser && (
             <span className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-medium text-indigo-400 border border-indigo-500/20">
-              READ-ONLY AGENT
+              AGENT ACTIONS ENABLED
             </span>
           )}
         </div>
 
         {/* Message Parts */}
-        <div className="space-y-1 text-zinc-300">
+        <div className="space-y-2 text-zinc-300">
           {parts.map((part, index) => {
             // Text part
             if (part.type === "text") {
@@ -168,15 +170,39 @@ export function ChatMessage({ message, userImage, userName }: ChatMessageProps) 
                 state?: string;
                 errorText?: string;
                 toolCallId?: string;
+                output?: unknown;
+                result?: unknown;
               };
               const toolName = toolPart.toolName || part.type;
+              const outputData = (toolPart.output || toolPart.result) as
+                | ActionPreparationResult
+                | undefined;
+
+              const isActionConfirmation =
+                outputData &&
+                typeof outputData === "object" &&
+                outputData.status === "requires_confirmation" &&
+                Boolean(outputData.confirmationToken) &&
+                Boolean(outputData.preview);
+
               return (
-                <ToolActivity
-                  key={toolPart.toolCallId || index}
-                  toolName={toolName}
-                  state={toolPart.state || "output-available"}
-                  errorText={toolPart.errorText}
-                />
+                <div key={toolPart.toolCallId || index} className="space-y-1">
+                  <ToolActivity
+                    toolName={toolName}
+                    state={toolPart.state || "output-available"}
+                    errorText={toolPart.errorText}
+                  />
+
+                  {/* Render Confirmation Card when tool requires user confirmation */}
+                  {isActionConfirmation && (
+                    <ActionConfirmationCard
+                      actionId={outputData.actionId}
+                      confirmationToken={outputData.confirmationToken}
+                      actionType={outputData.actionType}
+                      preview={outputData.preview}
+                    />
+                  )}
+                </div>
               );
             }
 

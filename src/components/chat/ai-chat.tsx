@@ -106,8 +106,8 @@ export function AIChat({ user, className = "", onConnectService }: AIChatProps) 
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xs font-bold text-zinc-100">SuperMail AI</h2>
-              <span className="rounded bg-indigo-500/10 px-1.5 py-0.2 text-[9px] font-semibold text-indigo-400 border border-indigo-500/20">
-                READ-ONLY
+              <span className="rounded bg-emerald-500/10 px-1.5 py-0.2 text-[9px] font-semibold text-emerald-400 border border-emerald-500/20">
+                ACTIONS ENABLED
               </span>
             </div>
             <p className="text-[10px] text-zinc-400">
@@ -321,7 +321,7 @@ export function AIChat({ user, className = "", onConnectService }: AIChatProps) 
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Ask SuperMail about your emails or calendar (e.g., 'What meetings do I have tomorrow?')..."
+              placeholder="Ask SuperMail to search emails, draft replies, or schedule meetings (e.g., 'Schedule meeting with Rahul tomorrow at 3 PM')..."
               rows={1}
               disabled={isLoading}
               className="max-h-32 min-h-[24px] w-full resize-none bg-transparent text-xs text-zinc-100 placeholder-zinc-500 outline-none leading-relaxed"
@@ -350,7 +350,7 @@ export function AIChat({ user, className = "", onConnectService }: AIChatProps) 
           </div>
           <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-zinc-500">
             <span>Press Enter to send, Shift+Enter for new line</span>
-            <span>Read-only agent with tenant isolation</span>
+            <span>Tenant-isolated AI with cryptographic action confirmation</span>
           </div>
         </div>
       </div>

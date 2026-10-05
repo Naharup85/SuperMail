@@ -9,7 +9,7 @@ interface PromptSuggestionsProps {
 
 const SUGGESTIONS = [
   {
-    category: "Gmail",
+    category: "Email Actions & Search",
     icon: (
       <svg className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
@@ -17,33 +17,34 @@ const SUGGESTIONS = [
     ),
     prompts: [
       "Show my latest emails.",
-      "Find unread emails.",
-      "Find emails about interviews.",
+      "Draft an email to Rahul saying I'll join tomorrow.",
+      "Send an email to rahul@example.com about project update.",
     ],
   },
   {
-    category: "Calendar",
+    category: "Calendar Actions",
     icon: (
       <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M6.75 3v2.25M17.25 3v2.253M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
       </svg>
     ),
     prompts: [
-      "What meetings do I have today?",
-      "What is on my calendar this week?",
-      "Am I free tomorrow at 3 PM?",
+      "What meetings do I have tomorrow?",
+      "Schedule a meeting with Rahul tomorrow at 3 PM.",
+      "Am I free tomorrow between 2 PM and 4 PM?",
     ],
   },
   {
-    category: "Combined Assistant",
+    category: "Agent Productivity",
     icon: (
       <svg className="h-4 w-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
       </svg>
     ),
     prompts: [
-      "Find emails about my upcoming meetings.",
-      "Show details of my next meeting.",
+      "Find unread emails and summarize them.",
+      "Move tomorrow's Rahul meeting from 3 PM to 4 PM.",
+      "Reply to this email saying I'll get back tomorrow.",
     ],
   },
 ];

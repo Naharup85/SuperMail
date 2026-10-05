@@ -17,11 +17,77 @@ interface ToolActivityProps {
 }
 
 /**
- * Returns a human-friendly label and icon for a Corsair tool operation.
+ * Returns a human-friendly label and icon for a Corsair / Agent tool operation.
  */
 function getToolMetadata(rawName: string) {
   const normalized = rawName.replace(/^tool-/, "").toLowerCase();
 
+  // Phase 11 write preparation tools
+  if (normalized.includes("prepare_send_email")) {
+    return {
+      action: "Preparing Email",
+      activeText: "Preparing email preview...",
+      doneText: "Email preview ready for review",
+      icon: "mail",
+      color: "text-indigo-400 border-indigo-500/20 bg-indigo-500/10",
+    };
+  }
+  if (normalized.includes("prepare_trash_email")) {
+    return {
+      action: "Preparing Trash Action",
+      activeText: "Preparing trash confirmation...",
+      doneText: "Trash confirmation ready for review",
+      icon: "trash",
+      color: "text-rose-400 border-rose-500/20 bg-rose-500/10",
+    };
+  }
+  if (normalized.includes("prepare_create_calendar_event")) {
+    return {
+      action: "Preparing Calendar Event",
+      activeText: "Preparing meeting details...",
+      doneText: "Meeting schedule ready for review",
+      icon: "calendar",
+      color: "text-blue-400 border-blue-500/20 bg-blue-500/10",
+    };
+  }
+  if (normalized.includes("prepare_update_calendar_event")) {
+    return {
+      action: "Preparing Event Update",
+      activeText: "Preparing meeting update...",
+      doneText: "Event update ready for review",
+      icon: "calendar",
+      color: "text-blue-400 border-blue-500/20 bg-blue-500/10",
+    };
+  }
+  if (normalized.includes("prepare_delete_calendar_event")) {
+    return {
+      action: "Preparing Event Deletion",
+      activeText: "Preparing event deletion confirmation...",
+      doneText: "Event deletion ready for review",
+      icon: "calendar",
+      color: "text-rose-400 border-rose-500/20 bg-rose-500/10",
+    };
+  }
+  if (normalized.includes("create_draft")) {
+    return {
+      action: "Creating Draft",
+      activeText: "Saving email draft to Gmail...",
+      doneText: "Draft created in Gmail",
+      icon: "mail",
+      color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/10",
+    };
+  }
+  if (normalized.includes("modify_email")) {
+    return {
+      action: "Updating Email",
+      activeText: "Updating email labels...",
+      doneText: "Updated email labels",
+      icon: "tag",
+      color: "text-purple-400 border-purple-500/20 bg-purple-500/10",
+    };
+  }
+
+  // Phase 10 read operations
   if (normalized.includes("messages_list") || normalized.includes("messages.list")) {
     return {
       action: "Searching Gmail",
