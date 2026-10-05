@@ -16,7 +16,31 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 
+/**
+ * Bounds the conversation message history to recent turns while maintaining
+ * coherent role boundaries and valid tool call/response pairs.
+ */
+function getBoundedMessageWindow(messages: UIMessage[], maxCount = 30): UIMessage[] {
+  if (messages.length <= maxCount) {
+    return messages;
+  }
+
+  let sliceIndex = messages.length - maxCount;
+
+  // Align start to a user message so the prompt context starts with a clean turn
+  while (sliceIndex < messages.length && messages[sliceIndex].role !== "user") {
+    sliceIndex++;
+  }
+
+  if (sliceIndex >= messages.length) {
+    sliceIndex = messages.length - maxCount;
+  }
+
+  return messages.slice(sliceIndex);
+}
+
 export async function POST(req: Request) {
+  const startTime = Date.now();
   try {
     // 1. Authenticate user session
     const session = await auth();
@@ -86,25 +110,34 @@ export async function POST(req: Request) {
     // 5. Build tools scoped to this tenant and authenticated user
     const tools = buildAgentTools(tenantId, session.user.id);
 
-    // 6. Convert messages to AI SDK model message representation
-    const modelMessages = await convertToModelMessages(messages);
+    // 6. Apply bounded context window to maintain recent conversational memory safely
+    const contextMessages = getBoundedMessageWindow(messages, 30);
 
-    // 7. Execute streaming language model generation with tool calling
+    // 7. Convert messages to AI SDK model message representation
+    const modelMessages = await convertToModelMessages(contextMessages);
+
+    // 8. Execute streaming language model generation with tool calling
     const result = streamText({
       model: getAgentModel(),
       system: getSystemPrompt(),
       messages: modelMessages,
       tools,
       stopWhen: isStepCount(MAX_AGENT_STEPS),
+      onFinish: ({ finishReason, usage }) => {
+        const durationMs = Date.now() - startTime;
+        console.log(
+          `[ChatAPI] Completed turn. FinishReason: ${finishReason}, Duration: ${durationMs}ms, InputTokens: ${usage?.inputTokens ?? "N/A"}, OutputTokens: ${usage?.outputTokens ?? "N/A"}`,
+        );
+      },
     });
 
-    // 8. Stream the UI message response back to the client
+    // 9. Stream the UI message response back to the client
     return result.toUIMessageStreamResponse();
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Internal chat processing error";
-    // Log safe diagnostic error without leaking credentials
-    console.error("[ChatAPI] Error processing request:", message);
+    const durationMs = Date.now() - startTime;
+    console.error(`[ChatAPI] Error processing request (${durationMs}ms):`, message);
 
     return NextResponse.json(
       { error: "An error occurred while communicating with the AI assistant." },

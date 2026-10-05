@@ -5,6 +5,7 @@ export * from "./config";
 export * from "./tools";
 export * from "./action-security";
 export * from "./executor";
+export * from "./context-normalizer";
 
 /**
  * Returns the configured Gemini LanguageModel instance.
