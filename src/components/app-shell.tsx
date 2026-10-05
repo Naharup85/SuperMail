@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/sidebar";
 import { Inbox } from "@/components/inbox";
 import { CalendarView } from "@/components/calendar";
 import { SettingsView } from "@/components/settings-view";
+import { AutomationsView } from "@/components/automations/automations-view";
 import { ComposeModal } from "@/components/compose-modal";
 import { AIChat } from "@/components/chat/ai-chat";
 import { MailFolder, NormalizedMessage } from "@/types/mail";
@@ -147,6 +148,10 @@ export function AppShell({ user, signOutAction }: AppShellProps) {
           {activeFolder === "ai" ? (
             <AIChat
               user={user}
+              onConnectService={handleConnect}
+            />
+          ) : activeFolder === "automations" ? (
+            <AutomationsView
               onConnectService={handleConnect}
             />
           ) : activeFolder === "calendar" ? (

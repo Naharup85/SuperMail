@@ -7,13 +7,19 @@ import { createGmailDraft, modifyGmailMessage } from "@/server/gmail";
 import { registerPendingAction } from "./action-security";
 import { isActionAllowed, getUserPermissions } from "./policy";
 import { logAuditEvent } from "./audit";
-import type {
+import {
   EmailActionPreview,
   TrashMessagePreview,
   CalendarCreatePreview,
   CalendarUpdatePreview,
   CalendarDeletePreview,
+  AutomationActionPreview,
 } from "@/types/agent-actions";
+import {
+  formatScheduleDescription,
+  validateSchedule,
+} from "@/server/automations/scheduler";
+import type { ScheduleConfig } from "@/types/automations";
 
 import {
   normalizeGmailMessageForAgent,
@@ -540,6 +546,173 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
       } catch (error: unknown) {
         const message =
           error instanceof Error ? error.message : "Failed to prepare event deletion.";
+        return { status: "rejected", error: message };
+      }
+    },
+  });
+
+  // 9. Automation Staged Action: Create Automation (Requires Confirmation)
+  tools["prepare_create_automation"] = tool({
+    description:
+      "Prepare to create a scheduled or one-time automation task (e.g. daily email summaries, weekly meeting reminders). Generates a preview card in the UI for user review and explicit confirmation.",
+    inputSchema: z.object({
+      name: z.string().describe("A concise descriptive name for the automation (e.g. 'Morning Email Summary')"),
+      scheduleType: z
+        .enum(["daily", "weekdays", "weekly", "one_time", "custom_cron"])
+        .describe("The frequency or type of schedule"),
+      time: z
+        .string()
+        .optional()
+        .describe("Time of day in 24-hour HH:MM format (e.g. '09:00', '17:00')"),
+      daysOfWeek: z
+        .array(z.number())
+        .optional()
+        .describe("Days of week for weekly schedule (0=Sun, 1=Mon, ..., 5=Fri, 6=Sat)"),
+      datetime: z
+        .string()
+        .optional()
+        .describe("ISO datetime string for one_time schedules (e.g. '2026-10-10T10:00:00')"),
+      cron: z
+        .string()
+        .optional()
+        .describe("Standard 5-part cron expression for custom_cron schedules"),
+      timezone: z
+        .string()
+        .describe("IANA timezone identifier (e.g. 'Asia/Kolkata', 'America/New_York', 'UTC')"),
+      instruction: z
+        .string()
+        .describe("The exact task instructions to execute on schedule (e.g. 'Summarize my unread emails received today')"),
+      allowedTools: z
+        .array(z.string())
+        .optional()
+        .describe("List of allowed tool operations (defaults to read-only Gmail & Calendar tools)"),
+    }),
+    execute: async ({
+      name,
+      scheduleType,
+      time,
+      daysOfWeek,
+      datetime,
+      cron,
+      timezone,
+      instruction,
+      allowedTools,
+    }) => {
+      try {
+        const schedule: ScheduleConfig = {
+          type: scheduleType,
+          time,
+          daysOfWeek,
+          datetime,
+          cron,
+        };
+
+        const validation = validateSchedule(schedule, timezone);
+        if (!validation.valid) {
+          return { status: "rejected", error: validation.error };
+        }
+
+        const defaultReadTools = [
+          "gmail.api.messages.list",
+          "gmail.api.messages.get",
+          "googlecalendar.api.events.getMany",
+        ];
+
+        const finalTools = Array.isArray(allowedTools) && allowedTools.length > 0
+          ? allowedTools
+          : defaultReadTools;
+
+        const scheduleDesc = formatScheduleDescription(schedule, timezone);
+        const isReadOnly = finalTools.every(
+          (t) => !t.includes("send") && !t.includes("trash") && !t.includes("delete"),
+        );
+
+        const preview: AutomationActionPreview = {
+          action: "create_automation",
+          name,
+          scheduleDescription: scheduleDesc,
+          schedule: schedule as unknown as Record<string, unknown>,
+          timezone,
+          instruction,
+          allowedTools: finalTools,
+          isReadOnly,
+          warning: isReadOnly
+            ? undefined
+            : "This automation includes write actions which will create pending approvals.",
+        };
+
+        const pending = await registerPendingAction({
+          userId,
+          tenantId,
+          action: "create_automation",
+          actionParams: {
+            name,
+            schedule,
+            timezone,
+            instruction,
+            allowedTools: finalTools,
+          },
+          preview,
+        });
+
+        return {
+          status: "requires_confirmation",
+          actionId: pending.actionId,
+          confirmationToken: pending.confirmationToken,
+          actionType: "create_automation",
+          preview,
+          message: `I've prepared the automation "${name}" (${scheduleDesc}). Please review and confirm below.`,
+        };
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Failed to prepare automation creation.";
+        return { status: "rejected", error: message };
+      }
+    },
+  });
+
+  // 10. Automation Staged Action: Delete Automation (Requires Confirmation)
+  tools["prepare_delete_automation"] = tool({
+    description:
+      "Prepare to delete an automation workflow. Generates a confirmation card in the UI.",
+    inputSchema: z.object({
+      automationId: z.string().describe("The ID of the automation to delete"),
+      name: z.string().optional().describe("Name of the automation"),
+    }),
+    execute: async ({ automationId, name }) => {
+      try {
+        const preview: AutomationActionPreview = {
+          action: "delete_automation",
+          automationId,
+          name: name || "Automation",
+          scheduleDescription: "Delete permanently",
+          schedule: { type: "one_time" },
+          timezone: "UTC",
+          instruction: "Delete automation",
+          allowedTools: [],
+          isReadOnly: true,
+          warning: "This will permanently delete this automation and cancel all future runs.",
+        };
+
+        const pending = await registerPendingAction({
+          userId,
+          tenantId,
+          action: "delete_automation",
+          actionParams: { automationId },
+          preview,
+        });
+
+        return {
+          status: "requires_confirmation",
+          actionId: pending.actionId,
+          confirmationToken: pending.confirmationToken,
+          actionType: "delete_automation",
+          preview,
+          message: `I've prepared to delete the automation "${name || automationId}". Please confirm below.`,
+        };
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Failed to prepare automation deletion.";
         return { status: "rejected", error: message };
       }
     },

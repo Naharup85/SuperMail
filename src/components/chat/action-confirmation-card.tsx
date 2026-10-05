@@ -13,7 +13,10 @@ import type {
   CalendarCreatePreview,
   CalendarUpdatePreview,
   CalendarDeletePreview,
+  AutomationActionPreview,
 } from "@/types/agent-actions";
+
+export const AUTOMATIONS_KEY = "automations";
 
 interface ActionConfirmationCardProps {
   actionId: string;
@@ -52,6 +55,12 @@ export function ActionConfirmationCard({
     ) {
       queryClient.invalidateQueries({ queryKey: [CALENDAR_EVENTS_KEY] });
       queryClient.invalidateQueries({ queryKey: [CALENDAR_EVENT_KEY] });
+    } else if (
+      actionType === "create_automation" ||
+      actionType === "update_automation" ||
+      actionType === "delete_automation"
+    ) {
+      queryClient.invalidateQueries({ queryKey: [AUTOMATIONS_KEY] });
     }
   };
 
@@ -106,7 +115,9 @@ export function ActionConfirmationCard({
   };
 
   const isDestructive =
-    actionType === "trash_message" || actionType === "delete_calendar_event";
+    actionType === "trash_message" ||
+    actionType === "delete_calendar_event" ||
+    actionType === "delete_automation";
 
   const getActionTitle = () => {
     switch (actionType) {
@@ -122,6 +133,12 @@ export function ActionConfirmationCard({
         return "Update Calendar Event";
       case "delete_calendar_event":
         return "Delete Calendar Event";
+      case "create_automation":
+        return "Create Automation";
+      case "update_automation":
+        return "Update Automation";
+      case "delete_automation":
+        return "Delete Automation";
       default:
         return "Execute Action";
     }
@@ -135,17 +152,17 @@ export function ActionConfirmationCard({
         </svg>
       );
     }
-    if (actionType === "trash_message") {
+    if (actionType === "trash_message" || actionType === "delete_calendar_event" || actionType === "delete_automation") {
       return (
         <svg className="h-4 w-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </svg>
       );
     }
-    if (actionType === "delete_calendar_event") {
+    if (actionType === "create_automation" || actionType === "update_automation") {
       return (
-        <svg className="h-4 w-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        <svg className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       );
     }
@@ -161,6 +178,7 @@ export function ActionConfirmationCard({
   const calCreate = preview as CalendarCreatePreview;
   const calUpdate = preview as CalendarUpdatePreview;
   const calDelete = preview as CalendarDeletePreview;
+  const autoPreview = preview as AutomationActionPreview;
 
   return (
     <div
@@ -354,6 +372,64 @@ export function ActionConfirmationCard({
             )}
             <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-xs text-rose-300">
               {calDelete.warning}
+            </div>
+          </div>
+        )}
+
+        {/* Automation Create Preview */}
+        {actionType === "create_automation" && autoPreview && (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-zinc-100">{autoPreview.name}</span>
+              <span className="rounded bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                {autoPreview.isReadOnly ? "Read-Only Workflow" : "Write Workflow"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-zinc-300 bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800/80">
+              <div>
+                <span className="text-zinc-500 block">Schedule</span>
+                <span className="font-medium text-amber-400">{autoPreview.scheduleDescription}</span>
+              </div>
+              <div>
+                <span className="text-zinc-500 block">Timezone</span>
+                <span className="font-medium text-zinc-200">{autoPreview.timezone}</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-zinc-500 block">Task Instruction</span>
+                <p className="mt-0.5 text-zinc-200 font-mono text-[11px] bg-zinc-900/80 p-2 rounded border border-zinc-800">
+                  {autoPreview.instruction}
+                </p>
+              </div>
+              {autoPreview.allowedTools && autoPreview.allowedTools.length > 0 && (
+                <div className="col-span-2">
+                  <span className="text-zinc-500 block">Allowed Tools</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {autoPreview.allowedTools.map((t, idx) => (
+                      <span key={idx} className="rounded bg-zinc-800 text-zinc-300 px-1.5 py-0.5 text-[10px] border border-zinc-700/60">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {autoPreview.warning && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-[11px] text-amber-300">
+                {autoPreview.warning}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Automation Delete Preview */}
+        {actionType === "delete_automation" && autoPreview && (
+          <div className="space-y-2">
+            <div className="text-xs">
+              <span className="text-zinc-400">Automation: </span>
+              <span className="font-bold text-zinc-100">{autoPreview.name}</span>
+            </div>
+            <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-xs text-rose-300">
+              {autoPreview.warning || "This will permanently delete this automation and cancel upcoming executions."}
             </div>
           </div>
         )}

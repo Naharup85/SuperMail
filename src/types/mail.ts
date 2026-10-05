@@ -4,6 +4,7 @@ export type MailFolder =
   | "sent"
   | "drafts"
   | "calendar"
+  | "automations"
   | "ai"
   | "settings";
 

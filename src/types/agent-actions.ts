@@ -21,7 +21,10 @@ export type HighImpactActionType =
   | "trash_message"
   | "create_calendar_event"
   | "update_calendar_event"
-  | "delete_calendar_event";
+  | "delete_calendar_event"
+  | "create_automation"
+  | "update_automation"
+  | "delete_automation";
 
 export type LowRiskActionType =
   | "create_draft"
@@ -40,7 +43,7 @@ export type AgentActionType =
 export interface ActionPolicyDefinition {
   action: AgentActionType | string;
   name: string;
-  provider: "gmail" | "googlecalendar";
+  provider: "gmail" | "googlecalendar" | "automations";
   riskLevel: ActionRiskLevel;
   allowed: boolean;
   requiresConfirmation: boolean;
@@ -110,13 +113,28 @@ export interface CalendarDeletePreview {
   warning: string;
 }
 
+export interface AutomationActionPreview {
+  action: "create_automation" | "update_automation" | "delete_automation";
+  automationId?: string;
+  name: string;
+  scheduleDescription: string;
+  schedule: Record<string, unknown>;
+  timezone: string;
+  instruction: string;
+  allowedTools: string[];
+  isReadOnly: boolean;
+  warning?: string;
+}
+
 export type ActionPreview =
   | EmailActionPreview
   | DraftActionPreview
   | TrashMessagePreview
   | CalendarCreatePreview
   | CalendarUpdatePreview
-  | CalendarDeletePreview;
+  | CalendarDeletePreview
+  | AutomationActionPreview;
+
 
 export interface PendingActionPayload {
   id: string; // Unique nonce/UUID

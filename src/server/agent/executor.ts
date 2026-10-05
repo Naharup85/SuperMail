@@ -5,6 +5,10 @@ import {
   deleteCalendarEvent,
 } from "@/server/googlecalendar";
 import type { PendingActionPayload } from "@/types/agent-actions";
+import type {
+  CreateAutomationInput,
+  UpdateAutomationInput,
+} from "@/types/automations";
 import { isActionAllowed, getUserPermissions } from "./policy";
 import { logAuditEvent } from "./audit";
 
@@ -166,6 +170,63 @@ export async function executeConfirmedAction(
         const eventTitle = (payload.preview as { title?: string })?.title || "Meeting";
         resultMessage = `Calendar event "${eventTitle}" has been deleted.`;
         executionData = result;
+        break;
+      }
+
+      case "create_automation": {
+        const { createAutomation } = await import("@/server/automations/repository");
+        const autoInput = params as unknown as CreateAutomationInput;
+        const result = await createAutomation({
+          userId,
+          tenantId,
+          input: {
+            name: String(autoInput.name || "Scheduled Automation"),
+            description: autoInput.description ? String(autoInput.description) : undefined,
+            schedule: autoInput.schedule,
+            timezone: String(autoInput.timezone || "Asia/Kolkata"),
+            instruction: String(autoInput.instruction || ""),
+            allowedTools: autoInput.allowedTools,
+          },
+        });
+
+        resultMessage = `Automation "${result.name}" created successfully.`;
+        executionData = result;
+        break;
+      }
+
+      case "update_automation": {
+        const { updateAutomation, pauseAutomation, resumeAutomation } = await import("@/server/automations/repository");
+        const autoId = String(params.automationId || params.id || "");
+        if (!autoId) {
+          throw new Error("Automation ID is required to update automation.");
+        }
+
+        if (params.action === "pause") {
+          const result = await pauseAutomation(autoId, userId, tenantId);
+          resultMessage = `Automation "${result?.name || autoId}" paused.`;
+          executionData = result;
+        } else if (params.action === "resume") {
+          const result = await resumeAutomation(autoId, userId, tenantId);
+          resultMessage = `Automation "${result?.name || autoId}" resumed.`;
+          executionData = result;
+        } else {
+          const result = await updateAutomation(autoId, userId, tenantId, params as unknown as UpdateAutomationInput);
+          resultMessage = `Automation "${result?.name || autoId}" updated.`;
+          executionData = result;
+        }
+        break;
+      }
+
+      case "delete_automation": {
+        const { deleteAutomation } = await import("@/server/automations/repository");
+        const autoId = String(params.automationId || params.id || "");
+        if (!autoId) {
+          throw new Error("Automation ID is required to delete automation.");
+        }
+
+        const result = await deleteAutomation(autoId, userId, tenantId);
+        resultMessage = result ? `Automation deleted.` : `Automation could not be deleted.`;
+        executionData = { success: result };
         break;
       }
 

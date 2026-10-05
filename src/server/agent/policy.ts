@@ -174,6 +174,44 @@ export const ACTION_POLICIES: Record<string, ActionPolicyDefinition> = {
     description: "Purging entire calendars is blocked.",
   },
 
+  // --- Automation Management Actions (Phase 14) ---
+  create_automation: {
+    action: "create_automation",
+    name: "Create Automation Workflow",
+    provider: "automations",
+    riskLevel: "LOW",
+    allowed: true,
+    requiresConfirmation: true,
+    isDestructive: false,
+    isReversible: true,
+    requiredPermission: null,
+    description: "Create a scheduled or one-time automation task after user confirmation.",
+  },
+  update_automation: {
+    action: "update_automation",
+    name: "Update Automation Workflow",
+    provider: "automations",
+    riskLevel: "LOW",
+    allowed: true,
+    requiresConfirmation: true,
+    isDestructive: false,
+    isReversible: true,
+    requiredPermission: null,
+    description: "Update, pause, or resume an automation workflow after user confirmation.",
+  },
+  delete_automation: {
+    action: "delete_automation",
+    name: "Delete Automation Workflow",
+    provider: "automations",
+    riskLevel: "HIGH",
+    allowed: true,
+    requiresConfirmation: true,
+    isDestructive: true,
+    isReversible: false,
+    requiredPermission: null,
+    description: "Delete an automation workflow after user confirmation.",
+  },
+
   // --- Native Read Operations ---
   "gmail.api.messages.list": {
     action: "gmail.api.messages.list",
