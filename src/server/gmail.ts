@@ -65,26 +65,64 @@ export async function listGmailMessages(
   tenantId: string,
   options: ListGmailMessagesOptions = {},
 ) {
-  const { limit = 20, offset = 0 } = options;
+  const { limit = 20, q, folder } = options;
 
-  return corsair.withTenant(tenantId).gmail.db.messages.search({
-    limit,
-    offset,
+  // Build query parameter if folder is provided
+  let query = q || "";
+  if (folder) {
+    if (folder === "starred") {
+      query = query ? `${query} is:starred` : "is:starred";
+    } else if (folder === "sent") {
+      query = query ? `${query} is:sent` : "is:sent";
+    } else if (folder === "drafts") {
+      query = query ? `${query} is:draft` : "is:draft";
+    } else if (folder === "inbox") {
+      query = query ? `${query} in:inbox` : "in:inbox";
+    }
+  }
+
+  const listRes = await corsair.withTenant(tenantId).gmail.api.messages.list({
+    maxResults: limit,
+    q: query || undefined,
+    includeSpamTrash: false,
   });
+
+  if (!listRes.messages || listRes.messages.length === 0) {
+    return {
+      messages: [],
+      nextPageToken: listRes.nextPageToken,
+      resultSizeEstimate: listRes.resultSizeEstimate,
+    };
+  }
+
+  // Fetch full details for each message directly from Gmail API
+  const messages = await Promise.all(
+    listRes.messages.map(async (item) => {
+      if (!item.id) return item;
+      try {
+        return await corsair.withTenant(tenantId).gmail.api.messages.get({
+          id: item.id,
+          format: "full",
+        });
+      } catch (err) {
+        console.error(`Failed to fetch message details for ${item.id}:`, err);
+        return item;
+      }
+    }),
+  );
+
+  return {
+    messages,
+    nextPageToken: listRes.nextPageToken,
+    resultSizeEstimate: listRes.resultSizeEstimate,
+  };
 }
 
 export async function getGmailMessage(tenantId: string, messageId: string) {
-  try {
-    return await corsair.withTenant(tenantId).gmail.api.messages.get({
-      id: messageId,
-      format: "full",
-    });
-  } catch {
-    // Fallback to database cache if API direct fetch fails
-    return await corsair
-      .withTenant(tenantId)
-      .gmail.db.messages.findByEntityId(messageId);
-  }
+  return await corsair.withTenant(tenantId).gmail.api.messages.get({
+    id: messageId,
+    format: "full",
+  });
 }
 
 export async function getGmailThread(tenantId: string, threadId: string) {

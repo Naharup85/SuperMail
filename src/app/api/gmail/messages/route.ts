@@ -17,12 +17,16 @@ export async function GET(request: Request) {
 
   const limit = Number(searchParams.get("limit") ?? "20");
   const offset = Number(searchParams.get("offset") ?? "0");
+  const q = searchParams.get("q") ?? undefined;
+  const folder = searchParams.get("folder") ?? undefined;
 
   const tenantId = getTenantId(session.user.id);
 
   const messages = await listGmailMessages(tenantId, {
     limit,
     offset,
+    q,
+    folder,
   });
   return NextResponse.json(messages);
 }

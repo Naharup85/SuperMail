@@ -9,6 +9,7 @@ import { Inbox } from "@/components/inbox";
 import { CalendarView } from "@/components/calendar";
 import { SettingsView } from "@/components/settings-view";
 import { ComposeModal } from "@/components/compose-modal";
+import { AIChat } from "@/components/chat/ai-chat";
 import { MailFolder, NormalizedMessage } from "@/types/mail";
 import { useGmailMessages, GMAIL_MESSAGES_KEY } from "@/hooks/use-mail";
 import { useCalendarEvents, CALENDAR_EVENTS_KEY } from "@/hooks/use-calendar";
@@ -121,6 +122,8 @@ export function AppShell({ user, signOutAction }: AppShellProps) {
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing || isMailLoading || isCalendarLoading}
         signOutAction={signOutAction}
+        onOpenAI={() => setActiveFolder("ai")}
+        isAIOpen={activeFolder === "ai"}
       />
 
       {/* Main Container */}
@@ -141,7 +144,12 @@ export function AppShell({ user, signOutAction }: AppShellProps) {
 
         {/* Content Area */}
         <main className="flex flex-1 flex-col overflow-hidden bg-zinc-950">
-          {activeFolder === "calendar" ? (
+          {activeFolder === "ai" ? (
+            <AIChat
+              user={user}
+              onConnectService={handleConnect}
+            />
+          ) : activeFolder === "calendar" ? (
             <CalendarView
               events={events}
               isLoading={isCalendarLoading}

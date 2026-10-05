@@ -4,6 +4,7 @@ export type MailFolder =
   | "sent"
   | "drafts"
   | "calendar"
+  | "ai"
   | "settings";
 
 export interface NormalizedMessage {
@@ -245,21 +246,25 @@ export function parseGmailMessage(
     obj.sender ||
     "Unknown Sender";
 
-  let sender = String(rawFrom);
+  let sender = String(rawFrom).trim();
   let senderEmail = "";
   const fromMatch = rawFrom.match(/(.*)<(.+)>/);
   if (fromMatch) {
     sender = fromMatch[1].trim().replace(/^["']|["']$/g, "") || fromMatch[2].trim();
     senderEmail = fromMatch[2].trim();
+  } else if (sender.includes("@")) {
+    senderEmail = sender;
   }
 
   const rawTo = item.to || getHeader("to") || obj.to || "";
-  let to = String(rawTo);
+  let to = String(rawTo).trim();
   let toEmail = "";
   const toMatch = rawTo.match(/(.*)<(.+)>/);
   if (toMatch) {
     to = toMatch[1].trim().replace(/^["']|["']$/g, "") || toMatch[2].trim();
     toEmail = toMatch[2].trim();
+  } else if (to.includes("@")) {
+    toEmail = to;
   }
 
   const cc = getHeader("cc") || "";
