@@ -17,6 +17,11 @@ import { QueryProvider } from "@/components/query-provider";
 export const metadata: Metadata = {
   title: "SuperMail",
   description: "Unified Gmail and Google Calendar workspace",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

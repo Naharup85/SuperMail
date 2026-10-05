@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConnections } from "@/hooks/use-connections";
@@ -104,22 +105,15 @@ export function Header({
           </svg>
         </button>
 
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-md shadow-indigo-500/20">
-            <svg
-              className="h-5 w-5 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-              />
-            </svg>
-          </div>
+        <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-90">
+          <Image
+            src="/logo.png"
+            alt="SuperMail Logo"
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-xl object-contain shadow-md shadow-indigo-500/20"
+            priority
+          />
           <div className="hidden sm:block">
             <span className="bg-gradient-to-r from-zinc-100 via-zinc-200 to-zinc-400 bg-clip-text text-base font-bold tracking-tight text-transparent">
               SuperMail
@@ -128,7 +122,7 @@ export function Header({
               PRO
             </span>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Middle: Search Bar */}

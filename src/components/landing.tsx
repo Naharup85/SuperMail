@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 interface LandingProps {
@@ -31,21 +32,14 @@ export function Landing({ signInAction }: LandingProps) {
       {/* Navigation Header */}
       <header className="relative z-10 flex h-20 items-center justify-between px-6 lg:px-12 border-b border-zinc-800/40 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-lg shadow-indigo-500/25">
-            <svg
-              className="h-5 w-5 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-              />
-            </svg>
-          </div>
+          <Image
+            src="/logo.png"
+            alt="SuperMail Logo"
+            width={40}
+            height={40}
+            className="h-10 w-10 rounded-xl object-contain shadow-lg shadow-indigo-500/25"
+            priority
+          />
           <div>
             <span className="text-lg font-bold tracking-tight text-white">
               SuperMail
