@@ -1,20 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
 import { Inbox } from "@/components/inbox";
 import { CalendarView } from "@/components/calendar";
 import { SettingsView } from "@/components/settings-view";
 import { ComposeModal } from "@/components/compose-modal";
-import {
-  MailFolder,
-  NormalizedMessage,
-  NormalizedEvent,
-  parseGmailMessage,
-  parseCalendarEvent,
-} from "@/types/mail";
+import { MailFolder, NormalizedMessage } from "@/types/mail";
+import { useGmailMessages, GMAIL_MESSAGES_KEY } from "@/hooks/use-mail";
+import { useCalendarEvents, CALENDAR_EVENTS_KEY } from "@/hooks/use-calendar";
+import { useConnections } from "@/hooks/use-connections";
 
 interface AppShellProps {
   user?: {
@@ -28,6 +26,7 @@ interface AppShellProps {
 
 export function AppShell({ user, signOutAction }: AppShellProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeFolder, setActiveFolder] = useState<MailFolder>("inbox");
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -37,162 +36,41 @@ export function AppShell({ user, signOutAction }: AppShellProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 20;
 
-  // Mail state
-  const [messages, setMessages] = useState<NormalizedMessage[]>([]);
-  const [isMailLoading, setIsMailLoading] = useState(true);
-  const [mailError, setMailError] = useState<string | null>(null);
+  // Cached Mail Query (per page)
+  const {
+    data: messages = [],
+    isLoading: isMailLoading,
+    error: mailErrorObj,
+    refetch: refetchMessages,
+  } = useGmailMessages({
+    page: currentPage,
+    pageSize,
+  });
+  const mailError = mailErrorObj ? mailErrorObj.message : null;
 
-  // Calendar state
-  const [events, setEvents] = useState<NormalizedEvent[]>([]);
-  const [isCalendarLoading, setIsCalendarLoading] = useState(false);
-  const [calendarError, setCalendarError] = useState<string | null>(null);
+  // Cached Calendar Query
+  const {
+    data: events = [],
+    isLoading: isCalendarLoading,
+    error: calendarErrorObj,
+    refetch: refetchEvents,
+  } = useCalendarEvents({ limit: 50 });
+  const calendarError = calendarErrorObj ? calendarErrorObj.message : null;
+
+  // Connections status
+  const { refetch: refetchConnections } = useConnections();
 
   // General refreshing state
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch Gmail messages
-  const fetchMessages = useCallback(async () => {
-    setIsMailLoading(true);
-    setMailError(null);
-    try {
-      const res = await fetch(`/api/gmail/messages?limit=100&offset=0`);
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(
-          errData?.error || `Failed to fetch messages (Status: ${res.status})`,
-        );
-      }
-      const data = await res.json();
-      const rawList = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.messages)
-          ? data.messages
-          : Array.isArray(data?.items)
-            ? data.items
-            : Array.isArray(data?.data)
-              ? data.data
-              : [];
-
-      const parsed = rawList.map((m: unknown, idx: number) =>
-        parseGmailMessage(m, idx),
-      );
-      setMessages(parsed);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to load messages";
-      setMailError(msg);
-      setMessages([]);
-    } finally {
-      setIsMailLoading(false);
-    }
-  }, []);
-
-  // Fetch Calendar events
-  const fetchEvents = useCallback(async () => {
-    setIsCalendarLoading(true);
-    setCalendarError(null);
-    try {
-      const res = await fetch("/api/calendar/events?limit=50");
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(
-          errData?.error || `Failed to fetch events (Status: ${res.status})`,
-        );
-      }
-      const data = await res.json();
-      const rawList = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.items)
-          ? data.items
-          : Array.isArray(data?.events)
-            ? data.events
-            : Array.isArray(data?.data)
-              ? data.data
-              : [];
-
-      const parsed = rawList.map((e: unknown, idx: number) =>
-        parseCalendarEvent(e, idx),
-      );
-      setEvents(parsed);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to load calendar events";
-      setCalendarError(msg);
-      setEvents([]);
-    } finally {
-      setIsCalendarLoading(false);
-    }
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    let ignore = false;
-
-    async function loadInitialData() {
-      try {
-        const [msgRes, evtRes] = await Promise.allSettled([
-          fetch(`/api/gmail/messages?limit=100&offset=0`),
-          fetch(`/api/calendar/events?limit=50`),
-        ]);
-
-        if (ignore) return;
-
-        if (msgRes.status === "fulfilled" && msgRes.value.ok) {
-          const data = await msgRes.value.json();
-          const rawList = Array.isArray(data)
-            ? data
-            : Array.isArray(data?.messages)
-              ? data.messages
-              : Array.isArray(data?.items)
-                ? data.items
-                : Array.isArray(data?.data)
-                  ? data.data
-                  : [];
-          setMessages(rawList.map((m: unknown, idx: number) => parseGmailMessage(m, idx)));
-          setMailError(null);
-        } else if (msgRes.status === "fulfilled") {
-          const errData = await msgRes.value.json().catch(() => ({}));
-          setMailError(errData?.error || "Failed to fetch messages");
-        } else {
-          setMailError("Network error fetching messages");
-        }
-        setIsMailLoading(false);
-
-        if (evtRes.status === "fulfilled" && evtRes.value.ok) {
-          const data = await evtRes.value.json();
-          const rawList = Array.isArray(data)
-            ? data
-            : Array.isArray(data?.items)
-              ? data.items
-              : Array.isArray(data?.events)
-                ? data.events
-                : Array.isArray(data?.data)
-                  ? data.data
-                  : [];
-          setEvents(rawList.map((e: unknown, idx: number) => parseCalendarEvent(e, idx)));
-          setCalendarError(null);
-        } else if (evtRes.status === "fulfilled") {
-          const errData = await evtRes.value.json().catch(() => ({}));
-          setCalendarError(errData?.error || "Failed to fetch calendar events");
-        }
-        setIsCalendarLoading(false);
-      } catch {
-        if (!ignore) {
-          setIsMailLoading(false);
-          setIsCalendarLoading(false);
-        }
-      }
-    }
-
-    loadInitialData();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
   // Handle manual refresh
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.allSettled([fetchMessages(), fetchEvents()]);
+    await Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: [GMAIL_MESSAGES_KEY] }),
+      queryClient.invalidateQueries({ queryKey: [CALENDAR_EVENTS_KEY] }),
+      refetchConnections(),
+    ]);
     setIsRefreshing(false);
   };
 
@@ -213,16 +91,20 @@ export function AppShell({ user, signOutAction }: AppShellProps) {
     }
   };
 
-  // Optimistic message update
+  // Optimistic message update in cache
   const handleUpdateMessage = (updated: NormalizedMessage) => {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === updated.id ? updated : m)),
+    queryClient.setQueryData<NormalizedMessage[]>(
+      [GMAIL_MESSAGES_KEY, currentPage],
+      (old) => (old ? old.map((m) => (m.id === updated.id ? updated : m)) : []),
     );
   };
 
-  // Optimistic message delete
+  // Optimistic message delete in cache
   const handleDeleteMessage = (id: string) => {
-    setMessages((prev) => prev.filter((m) => m.id !== id));
+    queryClient.setQueryData<NormalizedMessage[]>(
+      [GMAIL_MESSAGES_KEY, currentPage],
+      (old) => (old ? old.filter((m) => m.id !== id) : []),
+    );
   };
 
   const unreadCount = messages.filter((m) => m.isUnread).length;
@@ -264,11 +146,23 @@ export function AppShell({ user, signOutAction }: AppShellProps) {
               events={events}
               isLoading={isCalendarLoading}
               error={calendarError}
-              onRefresh={fetchEvents}
+              onRefresh={refetchEvents}
               onConnectCalendar={() => handleConnect("calendar")}
-              onEventCreated={fetchEvents}
-              onEventUpdated={fetchEvents}
-              onEventDeleted={fetchEvents}
+              onEventCreated={() =>
+                queryClient.invalidateQueries({
+                  queryKey: [CALENDAR_EVENTS_KEY],
+                })
+              }
+              onEventUpdated={() =>
+                queryClient.invalidateQueries({
+                  queryKey: [CALENDAR_EVENTS_KEY],
+                })
+              }
+              onEventDeleted={() =>
+                queryClient.invalidateQueries({
+                  queryKey: [CALENDAR_EVENTS_KEY],
+                })
+              }
             />
           ) : activeFolder === "settings" ? (
             <SettingsView
@@ -283,7 +177,7 @@ export function AppShell({ user, signOutAction }: AppShellProps) {
               isLoading={isMailLoading}
               error={mailError}
               searchQuery={searchQuery}
-              onRefresh={fetchMessages}
+              onRefresh={refetchMessages}
               onConnectGmail={() => handleConnect("gmail")}
               onOpenCompose={() => setIsComposeOpen(true)}
               onUpdateMessage={handleUpdateMessage}
@@ -302,7 +196,7 @@ export function AppShell({ user, signOutAction }: AppShellProps) {
         isOpen={isComposeOpen}
         onClose={() => setIsComposeOpen(false)}
         onSent={() => {
-          fetchMessages();
+          queryClient.invalidateQueries({ queryKey: [GMAIL_MESSAGES_KEY] });
         }}
       />
     </div>

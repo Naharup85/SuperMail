@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { NormalizedEvent } from "@/types/mail";
+import { useCalendarMutations } from "@/hooks/use-calendar";
 
 interface EventModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export function EventModal({
   eventToEdit,
 }: EventModalProps) {
   const isEditing = Boolean(eventToEdit);
+  const { createEvent, updateEvent } = useCalendarMutations();
 
   // Helper to format Date for input
   const getInitialDate = () => {
@@ -59,8 +61,9 @@ export function EventModal({
   const [attendeesStr, setAttendeesStr] = useState(
     eventToEdit?.attendees?.map((a) => a.email).filter(Boolean).join(", ") || "",
   );
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isSubmitting = createEvent.isPending || updateEvent.isPending;
 
   if (!isOpen) return null;
 
@@ -120,31 +123,25 @@ export function EventModal({
       .filter((s) => s.includes("@"))
       .map((email) => ({ email }));
 
-    setIsSubmitting(true);
     setError(null);
 
     try {
-      const url = isEditing
-        ? `/api/calendar/events/${eventToEdit?.id}`
-        : "/api/calendar/events";
-      const method = isEditing ? "PATCH" : "POST";
+      const payload = {
+        summary: summary.trim(),
+        description: description.trim() || undefined,
+        location: location.trim() || undefined,
+        start: startPayload,
+        end: endPayload,
+        attendees: attendees.length > 0 ? attendees : undefined,
+      };
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          summary: summary.trim(),
-          description: description.trim() || undefined,
-          location: location.trim() || undefined,
-          start: startPayload,
-          end: endPayload,
-          attendees: attendees.length > 0 ? attendees : undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || `Failed to save event (${res.status})`);
+      if (isEditing && eventToEdit?.id) {
+        await updateEvent.mutateAsync({
+          id: eventToEdit.id,
+          ...payload,
+        });
+      } else {
+        await createEvent.mutateAsync(payload);
       }
 
       onSaved();
@@ -152,8 +149,6 @@ export function EventModal({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to save event";
       setError(msg);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

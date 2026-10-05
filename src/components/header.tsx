@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useConnections } from "@/hooks/use-connections";
 
 interface HeaderProps {
   user?: {
@@ -32,7 +33,12 @@ export function Header({
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [connectingService, setConnectingService] = useState<string | null>(null);
 
+  const { isGmailConnected, isCalendarConnected, isLoading: isConnectionsLoading } = useConnections();
+
   const handleConnect = async (service: "gmail" | "calendar") => {
+    if ((service === "gmail" && isGmailConnected) || (service === "calendar" && isCalendarConnected)) {
+      return;
+    }
     try {
       setConnectingService(service);
       const res = await fetch(`/api/corsair/connect/${service}`);
@@ -188,28 +194,59 @@ export function Header({
 
         {/* Quick Connect Actions (Desktop) */}
         <div className="hidden lg:flex items-center gap-1.5">
-          <Link
-            href="/api/corsair/connect/gmail"
-            onClick={(e) => {
-              e.preventDefault();
-              handleConnect("gmail");
-            }}
-            className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300"
-          >
-            <span className="h-2 w-2 rounded-full bg-red-400"></span>
-            {connectingService === "gmail" ? "Connecting..." : "Connect Gmail"}
-          </Link>
-          <Link
-            href="/api/corsair/connect/calendar"
-            onClick={(e) => {
-              e.preventDefault();
-              handleConnect("calendar");
-            }}
-            className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300"
-          >
-            <span className="h-2 w-2 rounded-full bg-blue-400"></span>
-            {connectingService === "calendar" ? "Connecting..." : "Connect Calendar"}
-          </Link>
+          {isConnectionsLoading ? (
+            <div className="h-8 w-28 rounded-lg bg-zinc-900 border border-zinc-800 animate-pulse" />
+          ) : isGmailConnected ? (
+            <button
+              type="button"
+              disabled
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-300 cursor-default"
+            >
+              <svg className="h-3.5 w-3.5 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              <span>Gmail Connected</span>
+            </button>
+          ) : (
+            <Link
+              href="/api/corsair/connect/gmail"
+              onClick={(e) => {
+                e.preventDefault();
+                handleConnect("gmail");
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300"
+            >
+              <span className="h-2 w-2 rounded-full bg-red-400"></span>
+              {connectingService === "gmail" ? "Connecting..." : "Connect Gmail"}
+            </Link>
+          )}
+
+          {isConnectionsLoading ? (
+            <div className="h-8 w-32 rounded-lg bg-zinc-900 border border-zinc-800 animate-pulse" />
+          ) : isCalendarConnected ? (
+            <button
+              type="button"
+              disabled
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-300 cursor-default"
+            >
+              <svg className="h-3.5 w-3.5 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              <span>Calendar Connected</span>
+            </button>
+          ) : (
+            <Link
+              href="/api/corsair/connect/calendar"
+              onClick={(e) => {
+                e.preventDefault();
+                handleConnect("calendar");
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300"
+            >
+              <span className="h-2 w-2 rounded-full bg-blue-400"></span>
+              {connectingService === "calendar" ? "Connecting..." : "Connect Calendar"}
+            </Link>
+          )}
         </div>
 
         {/* User Profile Menu */}
@@ -253,35 +290,59 @@ export function Header({
                 </div>
 
                 <div className="py-1">
-                  <Link
-                    href="/api/corsair/connect/gmail"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setShowUserMenu(false);
-                      handleConnect("gmail");
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/80 hover:text-white"
-                  >
-                    <svg className="h-4 w-4 text-red-400" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
-                    </svg>
-                    Connect Gmail
-                  </Link>
+                  {isGmailConnected ? (
+                    <div className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 my-0.5">
+                      <div className="flex items-center gap-2">
+                        <svg className="h-4 w-4 text-emerald-400" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
+                        </svg>
+                        <span>Gmail Connected</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-emerald-400">✓</span>
+                    </div>
+                  ) : (
+                    <Link
+                      href="/api/corsair/connect/gmail"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setShowUserMenu(false);
+                        handleConnect("gmail");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/80 hover:text-white"
+                    >
+                      <svg className="h-4 w-4 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
+                      </svg>
+                      Connect Gmail
+                    </Link>
+                  )}
 
-                  <Link
-                    href="/api/corsair/connect/calendar"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setShowUserMenu(false);
-                      handleConnect("calendar");
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/80 hover:text-white"
-                  >
-                    <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Connect Google Calendar
-                  </Link>
+                  {isCalendarConnected ? (
+                    <div className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 my-0.5">
+                      <div className="flex items-center gap-2">
+                        <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span>Calendar Connected</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-emerald-400">✓</span>
+                    </div>
+                  ) : (
+                    <Link
+                      href="/api/corsair/connect/calendar"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setShowUserMenu(false);
+                        handleConnect("calendar");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/80 hover:text-white"
+                    >
+                      <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Connect Google Calendar
+                    </Link>
+                  )}
                 </div>
 
                 <div className="border-t border-zinc-800 pt-1">

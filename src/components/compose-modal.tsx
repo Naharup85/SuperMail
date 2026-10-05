@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useMailMutations } from "@/hooks/use-mail";
 
 interface ComposeModalProps {
   isOpen: boolean;
@@ -26,9 +27,11 @@ export function ComposeModal({
   const [showCc, setShowCc] = useState(false);
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
-  const [isSending, setIsSending] = useState(false);
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { sendMessage, createDraft } = useMailMutations();
+  const isSending = sendMessage.isPending;
+  const isSavingDraft = createDraft.isPending;
 
   if (!isOpen) return null;
 
@@ -39,65 +42,41 @@ export function ComposeModal({
       return;
     }
 
-    setIsSending(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/gmail/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: to.trim(),
-          cc: cc.trim() || undefined,
-          subject: subject.trim(),
-          body,
-          threadId: initialThreadId,
-        }),
+      await sendMessage.mutateAsync({
+        to: to.trim(),
+        cc: cc.trim() || undefined,
+        subject: subject.trim(),
+        body,
+        threadId: initialThreadId,
       });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || `Failed to send email (${res.status})`);
-      }
 
       onClose();
       if (onSent) onSent();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to send email";
       setError(msg);
-    } finally {
-      setIsSending(false);
     }
   };
 
   const handleSaveDraft = async () => {
-    setIsSavingDraft(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/gmail/drafts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: to.trim() || undefined,
-          subject: subject.trim() || undefined,
-          body,
-          threadId: initialThreadId,
-        }),
+      await createDraft.mutateAsync({
+        to: to.trim() || undefined,
+        subject: subject.trim() || undefined,
+        body,
+        threadId: initialThreadId,
       });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || "Failed to save draft");
-      }
 
       onClose();
       if (onSent) onSent();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to save draft";
       setError(msg);
-    } finally {
-      setIsSavingDraft(false);
     }
   };
 

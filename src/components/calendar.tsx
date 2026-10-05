@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { NormalizedEvent } from "@/types/mail";
 import { EventModal } from "@/components/event-modal";
+import { useCalendarMutations } from "@/hooks/use-calendar";
+import { useConnections } from "@/hooks/use-connections";
 
 interface CalendarViewProps {
   events: NormalizedEvent[];
@@ -33,7 +35,10 @@ export function CalendarView({
   const [selectedEvent, setSelectedEvent] = useState<NormalizedEvent | null>(null);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<NormalizedEvent | null>(null);
-  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+
+  const { deleteEvent } = useCalendarMutations();
+  const { isCalendarConnected } = useConnections();
+  const isDeletingId = deleteEvent.isPending ? selectedEvent?.id || null : null;
 
   // Navigation handlers
   const handleToday = () => {
@@ -125,22 +130,14 @@ export function CalendarView({
 
   // Delete event handler
   const handleDeleteEvent = async (id: string) => {
-    setIsDeletingId(id);
     try {
-      const res = await fetch(`/api/calendar/events/${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        if (selectedEvent?.id === id) {
-          setSelectedEvent(null);
-        }
-        if (onEventDeleted) onEventDeleted();
-        onRefresh();
+      await deleteEvent.mutateAsync({ id });
+      if (selectedEvent?.id === id) {
+        setSelectedEvent(null);
       }
+      if (onEventDeleted) onEventDeleted();
     } catch {
       // Revert
-    } finally {
-      setIsDeletingId(null);
     }
   };
 
@@ -207,16 +204,18 @@ export function CalendarView({
           >
             Retry
           </button>
-          <Link
-            href="/api/corsair/connect/calendar"
-            onClick={(e) => {
-              e.preventDefault();
-              onConnectCalendar();
-            }}
-            className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-600/20 transition-all hover:from-blue-500 hover:to-indigo-500"
-          >
-            Connect Google Calendar OAuth
-          </Link>
+          {!isCalendarConnected && (
+            <Link
+              href="/api/corsair/connect/calendar"
+              onClick={(e) => {
+                e.preventDefault();
+                onConnectCalendar();
+              }}
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-600/20 transition-all hover:from-blue-500 hover:to-indigo-500"
+            >
+              Connect Google Calendar OAuth
+            </Link>
+          )}
         </div>
       </div>
     );

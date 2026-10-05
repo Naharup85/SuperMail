@@ -8,25 +8,31 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || url.origin;
+
   if (!code || !state) {
-    return NextResponse.json(
-      { error: "Missing code or state" },
-      { status: 400 },
+    return NextResponse.redirect(
+      new URL("/?error=missing_oauth_params", baseUrl),
     );
   }
 
   const redirectUri =
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/corsair/connect/gmail/callback`;
+    `${baseUrl}/api/corsair/connect/gmail/callback`;
 
-  const result = await processOAuthCallback(corsair, {
-    code,
-    state,
-    redirectUri,
-  });
+  try {
+    await processOAuthCallback(corsair, {
+      code,
+      state,
+      redirectUri,
+    });
 
-  return NextResponse.json({
-    success: true,
-    plugin: result.plugin,
-    tenantId: result.tenantId,
-  });
+    return NextResponse.redirect(
+      new URL("/?connected=gmail", baseUrl),
+    );
+  } catch (error) {
+    console.error("Gmail OAuth callback error:", error);
+    return NextResponse.redirect(
+      new URL("/?error=oauth_failed", baseUrl),
+    );
+  }
 }

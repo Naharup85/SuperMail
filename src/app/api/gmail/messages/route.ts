@@ -24,6 +24,5 @@ export async function GET(request: Request) {
     limit,
     offset,
   });
-
   return NextResponse.json(messages);
 }

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { MailFolder, NormalizedMessage } from "@/types/mail";
 import { MessageList } from "@/components/message-list";
 import { MailDetail } from "@/components/mail-detail";
+import { useMailMutations } from "@/hooks/use-mail";
 
 interface InboxProps {
   activeFolder: MailFolder;
@@ -39,6 +40,7 @@ export function Inbox({
   onPrevPage,
 }: InboxProps) {
   const [selectedMessage, setSelectedMessage] = useState<NormalizedMessage | null>(null);
+  const { modifyMessage, trashMessage } = useMailMutations();
 
   // Filter messages based on activeFolder and search query
   const filteredMessages = messages.filter((msg) => {
@@ -69,9 +71,11 @@ export function Inbox({
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
   );
+
   const displayList = paginatedMessages.length > 0 ? paginatedMessages : filteredMessages;
 
   const totalPages = Math.max(1, Math.ceil(filteredMessages.length / pageSize));
+
 
   const getFolderTitle = () => {
     switch (activeFolder) {
@@ -98,13 +102,11 @@ export function Inbox({
     if (onUpdateMessage) onUpdateMessage(updated);
 
     try {
-      await fetch(`/api/gmail/messages/${msg.id}/modify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          addLabelIds: nextStarred ? ["STARRED"] : [],
-          removeLabelIds: nextStarred ? [] : ["STARRED"],
-        }),
+      await modifyMessage.mutateAsync({
+        id: msg.id,
+        threadId: msg.threadId,
+        addLabelIds: nextStarred ? ["STARRED"] : [],
+        removeLabelIds: nextStarred ? [] : ["STARRED"],
       });
     } catch {
       // Revert if error
@@ -124,13 +126,11 @@ export function Inbox({
     if (onUpdateMessage) onUpdateMessage(updated);
 
     try {
-      await fetch(`/api/gmail/messages/${msg.id}/modify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          addLabelIds: nextUnread ? ["UNREAD"] : [],
-          removeLabelIds: nextUnread ? [] : ["UNREAD"],
-        }),
+      await modifyMessage.mutateAsync({
+        id: msg.id,
+        threadId: msg.threadId,
+        addLabelIds: nextUnread ? ["UNREAD"] : [],
+        removeLabelIds: nextUnread ? [] : ["UNREAD"],
       });
     } catch {
       if (onUpdateMessage) onUpdateMessage(msg);
@@ -140,9 +140,7 @@ export function Inbox({
   const handleDelete = async (id: string) => {
     if (onDeleteMessage) onDeleteMessage(id);
     try {
-      await fetch(`/api/gmail/messages/${id}`, {
-        method: "DELETE",
-      });
+      await trashMessage.mutateAsync({ id });
     } catch {
       onRefresh();
     }

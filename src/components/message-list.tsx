@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { NormalizedMessage } from "@/types/mail";
+import { useConnections } from "@/hooks/use-connections";
 
 interface MessageListProps {
   messages: NormalizedMessage[];
@@ -29,6 +30,8 @@ export function MessageList({
   onToggleUnread,
   onDeleteMessage,
 }: MessageListProps) {
+  const { isGmailConnected } = useConnections();
+
   const handleStarClick = (e: React.MouseEvent, msg: NormalizedMessage) => {
     e.stopPropagation();
     if (onToggleStar) {
@@ -95,16 +98,18 @@ export function MessageList({
           >
             Try Again
           </button>
-          <Link
-            href="/api/corsair/connect/gmail"
-            onClick={(e) => {
-              e.preventDefault();
-              onConnectGmail();
-            }}
-            className="rounded-lg bg-gradient-to-r from-red-600 to-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-red-600/20 transition-all hover:from-red-500 hover:to-rose-500"
-          >
-            Connect Gmail OAuth
-          </Link>
+          {!isGmailConnected && (
+            <Link
+              href="/api/corsair/connect/gmail"
+              onClick={(e) => {
+                e.preventDefault();
+                onConnectGmail();
+              }}
+              className="rounded-lg bg-gradient-to-r from-red-600 to-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-red-600/20 transition-all hover:from-red-500 hover:to-rose-500"
+            >
+              Connect Gmail OAuth
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -133,16 +138,18 @@ export function MessageList({
           >
             Refresh Inbox
           </button>
-          <Link
-            href="/api/corsair/connect/gmail"
-            onClick={(e) => {
-              e.preventDefault();
-              onConnectGmail();
-            }}
-            className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-red-600/20 transition-all hover:bg-red-500"
-          >
-            Connect Gmail Account
-          </Link>
+          {!isGmailConnected && (
+            <Link
+              href="/api/corsair/connect/gmail"
+              onClick={(e) => {
+                e.preventDefault();
+                onConnectGmail();
+              }}
+              className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-red-600/20 transition-all hover:bg-red-500"
+            >
+              Connect Gmail Account
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -152,7 +159,6 @@ export function MessageList({
     <div className="divide-y divide-zinc-900">
       {messages.map((msg) => {
         const isSelected = selectedMessageId === msg.id;
-
         return (
           <div
             key={msg.id}

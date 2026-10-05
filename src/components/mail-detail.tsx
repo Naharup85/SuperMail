@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { NormalizedMessage, parseGmailMessage } from "@/types/mail";
+import React, { useState } from "react";
+import { NormalizedMessage } from "@/types/mail";
+import { useGmailMessage, useGmailThread, useMailMutations } from "@/hooks/use-mail";
 
 interface MailDetailProps {
   message: NormalizedMessage;
@@ -17,96 +18,37 @@ export function MailDetail({
   onMessageUpdated,
   onMessageDeleted,
 }: MailDetailProps) {
-  const [currentMessage, setCurrentMessage] = useState<NormalizedMessage>(message);
-  const [threadMessages, setThreadMessages] = useState<NormalizedMessage[]>([]);
-  const [isLoadingThread, setIsLoadingThread] = useState(false);
-  const [isStarred, setIsStarred] = useState(message.isStarred);
-  const [isUnread, setIsUnread] = useState(message.isUnread);
-  const [isDeleting, setIsDeleting] = useState(false);
+  // Use TanStack Query detail & thread caching
+  const { data: fetchedMessage } = useGmailMessage(message.id);
+  const { data: threadMessages, isLoading: isLoadingThread } = useGmailThread(
+    message.threadId,
+  );
+
+  const currentMessage =
+    (threadMessages &&
+      threadMessages.find((m: NormalizedMessage) => m.id === message.id)) ||
+    fetchedMessage ||
+    message;
+
+  const isStarred = currentMessage.isStarred;
+  const isUnread = currentMessage.isUnread;
+
+  const { modifyMessage, trashMessage, sendMessage } = useMailMutations();
 
   // Quick reply state
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [replyBody, setReplyBody] = useState("");
-  const [isSendingReply, setIsSendingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
-
-  // Fetch full message and thread details
-  useEffect(() => {
-    let ignore = false;
-
-    async function loadDetails() {
-      if (message.threadId) {
-        setIsLoadingThread(true);
-        try {
-          const threadRes = await fetch(`/api/gmail/threads/${message.threadId}`);
-          if (ignore) return;
-
-          if (threadRes.ok) {
-            const threadData = await threadRes.json();
-            const rawMsgs = Array.isArray(threadData?.messages)
-              ? threadData.messages
-              : Array.isArray(threadData)
-                ? threadData
-                : [];
-
-            if (rawMsgs.length > 0) {
-              const parsedList: NormalizedMessage[] = rawMsgs.map((m: unknown, idx: number) =>
-                parseGmailMessage(m, idx),
-              );
-              setThreadMessages(parsedList);
-              const foundCurrent =
-                parsedList.find((m: NormalizedMessage) => m.id === message.id) ||
-                parsedList[parsedList.length - 1];
-              if (foundCurrent) {
-                setCurrentMessage(foundCurrent);
-                setIsStarred(foundCurrent.isStarred);
-                setIsUnread(foundCurrent.isUnread);
-              }
-            }
-          }
-        } catch {
-          // Fallback to single message
-        } finally {
-          if (!ignore) setIsLoadingThread(false);
-        }
-      } else {
-        try {
-          const res = await fetch(`/api/gmail/messages/${message.id}`);
-          if (ignore) return;
-
-          if (res.ok) {
-            const data = await res.json();
-            const parsed = parseGmailMessage(data);
-            setCurrentMessage(parsed);
-            setIsStarred(parsed.isStarred);
-            setIsUnread(parsed.isUnread);
-          }
-        } catch {
-          // Keep initial
-        }
-      }
-    }
-
-    loadDetails();
-
-    return () => {
-      ignore = true;
-    };
-  }, [message.id, message.threadId]);
 
   // Handle Star toggle
   const handleToggleStar = async () => {
     const nextStarred = !isStarred;
-    setIsStarred(nextStarred);
-
     try {
-      await fetch(`/api/gmail/messages/${currentMessage.id}/modify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          addLabelIds: nextStarred ? ["STARRED"] : [],
-          removeLabelIds: nextStarred ? [] : ["STARRED"],
-        }),
+      await modifyMessage.mutateAsync({
+        id: currentMessage.id,
+        threadId: currentMessage.threadId,
+        addLabelIds: nextStarred ? ["STARRED"] : [],
+        removeLabelIds: nextStarred ? [] : ["STARRED"],
       });
 
       const updated = {
@@ -116,26 +58,21 @@ export function MailDetail({
           ? [...currentMessage.labelIds, "STARRED"]
           : currentMessage.labelIds.filter((l) => l !== "STARRED"),
       };
-      setCurrentMessage(updated);
       if (onMessageUpdated) onMessageUpdated(updated);
     } catch {
-      setIsStarred(!nextStarred);
+      // Reverted automatically by query state
     }
   };
 
   // Handle Read/Unread toggle
   const handleToggleUnread = async () => {
     const nextUnread = !isUnread;
-    setIsUnread(nextUnread);
-
     try {
-      await fetch(`/api/gmail/messages/${currentMessage.id}/modify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          addLabelIds: nextUnread ? ["UNREAD"] : [],
-          removeLabelIds: nextUnread ? [] : ["UNREAD"],
-        }),
+      await modifyMessage.mutateAsync({
+        id: currentMessage.id,
+        threadId: currentMessage.threadId,
+        addLabelIds: nextUnread ? ["UNREAD"] : [],
+        removeLabelIds: nextUnread ? [] : ["UNREAD"],
       });
 
       const updated = {
@@ -145,33 +82,29 @@ export function MailDetail({
           ? [...currentMessage.labelIds, "UNREAD"]
           : currentMessage.labelIds.filter((l) => l !== "UNREAD"),
       };
-      setCurrentMessage(updated);
       if (onMessageUpdated) onMessageUpdated(updated);
     } catch {
-      setIsUnread(!nextUnread);
+      // Reverted
     }
   };
 
   // Handle Trash / Delete
   const handleDelete = async () => {
-    if (isDeleting) return;
-    setIsDeleting(true);
-
     try {
-      await fetch(`/api/gmail/messages/${currentMessage.id}`, {
-        method: "DELETE",
+      await trashMessage.mutateAsync({
+        id: currentMessage.id,
+        threadId: currentMessage.threadId,
       });
       if (onMessageDeleted) onMessageDeleted(currentMessage.id);
       onBack();
     } catch {
-      setIsDeleting(false);
+      // Handled
     }
   };
 
   // Handle Send Reply
   const handleSendReply = async () => {
     if (!replyBody.trim()) return;
-    setIsSendingReply(true);
     setReplyError(null);
 
     const recipient = currentMessage.senderEmail || currentMessage.sender;
@@ -180,57 +113,26 @@ export function MailDetail({
       : `Re: ${currentMessage.subject}`;
 
     try {
-      const res = await fetch("/api/gmail/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: recipient,
-          subject: replySubject,
-          body: replyBody,
-          threadId: currentMessage.threadId,
-          inReplyTo: currentMessage.id,
-        }),
+      await sendMessage.mutateAsync({
+        to: recipient,
+        subject: replySubject,
+        body: replyBody,
+        threadId: currentMessage.threadId,
+        inReplyTo: currentMessage.id,
       });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || "Failed to send reply");
-      }
 
       setReplyBody("");
       setShowReplyBox(false);
-
-      // Re-fetch thread messages
-      if (currentMessage.threadId) {
-        const threadRes = await fetch(
-          `/api/gmail/threads/${currentMessage.threadId}`,
-        );
-        if (threadRes.ok) {
-          const threadData = await threadRes.json();
-          const rawMsgs = Array.isArray(threadData?.messages)
-            ? threadData.messages
-            : Array.isArray(threadData)
-              ? threadData
-              : [];
-          if (rawMsgs.length > 0) {
-            setThreadMessages(
-              rawMsgs.map((m: unknown, idx: number) =>
-                parseGmailMessage(m, idx),
-              ),
-            );
-          }
-        }
-      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to send reply";
       setReplyError(msg);
-    } finally {
-      setIsSendingReply(false);
     }
   };
 
   const messagesToRender =
-    threadMessages.length > 0 ? threadMessages : [currentMessage];
+    threadMessages && threadMessages.length > 0
+      ? threadMessages
+      : [currentMessage];
 
   return (
     <div className="flex h-full flex-col bg-zinc-950">
@@ -255,6 +157,7 @@ export function MailDetail({
           <button
             type="button"
             onClick={handleToggleStar}
+            disabled={modifyMessage.isPending}
             title={isStarred ? "Unstar" : "Star"}
             className={`p-2 rounded-lg border border-zinc-800 transition-colors ${
               isStarred
@@ -277,6 +180,7 @@ export function MailDetail({
           <button
             type="button"
             onClick={handleToggleUnread}
+            disabled={modifyMessage.isPending}
             title={isUnread ? "Mark as read" : "Mark as unread"}
             className={`p-2 rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors`}
           >
@@ -289,7 +193,7 @@ export function MailDetail({
           <button
             type="button"
             onClick={handleDelete}
-            disabled={isDeleting}
+            disabled={trashMessage.isPending}
             title="Delete / Move to trash"
             className="p-2 rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400 transition-colors disabled:opacity-50"
           >
@@ -453,10 +357,10 @@ export function MailDetail({
               <button
                 type="button"
                 onClick={handleSendReply}
-                disabled={isSendingReply || !replyBody.trim()}
+                disabled={sendMessage.isPending || !replyBody.trim()}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50"
               >
-                {isSendingReply ? "Sending..." : "Send Reply"}
+                {sendMessage.isPending ? "Sending..." : "Send Reply"}
               </button>
             </div>
           </div>

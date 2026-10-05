@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { MailFolder } from "@/types/mail";
+import { useConnections } from "@/hooks/use-connections";
 
 interface SidebarProps {
   activeFolder: MailFolder;
@@ -23,6 +24,8 @@ export function Sidebar({
   onCloseMobile,
   onOpenCompose,
 }: SidebarProps) {
+  const { isGmailConnected, isCalendarConnected, isLoading: isConnectionsLoading } = useConnections();
+
   const navItems: {
     id: MailFolder;
     label: string;
@@ -158,27 +161,51 @@ export function Sidebar({
             Connected Integrations
           </div>
           <div className="space-y-1.5">
-            <Link
-              href="/api/corsair/connect/gmail"
-              className="group flex items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300 transition-all hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300"
-            >
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
-                <span className="font-medium text-zinc-300 group-hover:text-red-200">Gmail OAuth</span>
+            {isConnectionsLoading ? (
+              <div className="h-9 w-full rounded-lg bg-zinc-900/40 border border-zinc-800/80 animate-pulse" />
+            ) : isGmailConnected ? (
+              <div className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-zinc-300">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                  <span className="font-medium text-zinc-200">Gmail</span>
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-400">✓ Connected</span>
               </div>
-              <span className="text-[10px] text-zinc-500 group-hover:text-red-400">Connect &rarr;</span>
-            </Link>
+            ) : (
+              <Link
+                href="/api/corsair/connect/gmail"
+                className="group flex items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300 transition-all hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                  <span className="font-medium text-zinc-300 group-hover:text-red-200">Gmail OAuth</span>
+                </div>
+                <span className="text-[10px] text-zinc-500 group-hover:text-red-400">Connect &rarr;</span>
+              </Link>
+            )}
 
-            <Link
-              href="/api/corsair/connect/calendar"
-              className="group flex items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300 transition-all hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300"
-            >
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
-                <span className="font-medium text-zinc-300 group-hover:text-blue-200">Calendar OAuth</span>
+            {isConnectionsLoading ? (
+              <div className="h-9 w-full rounded-lg bg-zinc-900/40 border border-zinc-800/80 animate-pulse" />
+            ) : isCalendarConnected ? (
+              <div className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-zinc-300">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                  <span className="font-medium text-zinc-200">Google Calendar</span>
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-400">✓ Connected</span>
               </div>
-              <span className="text-[10px] text-zinc-500 group-hover:text-blue-400">Connect &rarr;</span>
-            </Link>
+            ) : (
+              <Link
+                href="/api/corsair/connect/calendar"
+                className="group flex items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300 transition-all hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
+                  <span className="font-medium text-zinc-300 group-hover:text-blue-200">Calendar OAuth</span>
+                </div>
+                <span className="text-[10px] text-zinc-500 group-hover:text-blue-400">Connect &rarr;</span>
+              </Link>
+            )}
           </div>
         </div>
       </div>
