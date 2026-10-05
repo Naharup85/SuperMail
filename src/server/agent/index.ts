@@ -2,6 +2,8 @@ import { google } from "@ai-sdk/google";
 import { DEFAULT_GEMINI_MODEL } from "./config";
 
 export * from "./config";
+export * from "./policy";
+export * from "./audit";
 export * from "./tools";
 export * from "./action-security";
 export * from "./executor";
@@ -15,3 +17,4 @@ export function getAgentModel() {
   const modelName = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
   return google(modelName);
 }
+

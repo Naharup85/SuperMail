@@ -4,6 +4,8 @@ import type {
   PendingActionPayload,
   ActionPreview,
 } from "@/types/agent-actions";
+import { isActionAllowed, getUserPermissions } from "./policy";
+import { logAuditEvent } from "./audit";
 
 /**
  * Action validity duration: 10 minutes.
@@ -111,15 +113,30 @@ export function verifyConfirmationToken(
 }
 
 /**
- * Registers a new pending action on the server.
+ * Registers a new pending action on the server after policy verification.
  */
-export function registerPendingAction(params: {
+export async function registerPendingAction(params: {
   userId: string;
   tenantId: string;
   action: HighImpactActionType;
   actionParams: Record<string, unknown>;
   preview: ActionPreview;
-}): { actionId: string; confirmationToken: string; payload: PendingActionPayload } {
+}): Promise<{ actionId: string; confirmationToken: string; payload: PendingActionPayload }> {
+  // 1. Verify action policy & user permissions before staging
+  const userPerms = await getUserPermissions(params.userId);
+  const policyCheck = isActionAllowed(params.action, userPerms);
+
+  if (!policyCheck.allowed) {
+    logAuditEvent({
+      userId: params.userId,
+      tenantId: params.tenantId,
+      action: params.action,
+      status: "rejected",
+      reason: policyCheck.reason || "Action blocked by policy.",
+    });
+    throw new Error(policyCheck.reason || "Action is not allowed by policy.");
+  }
+
   const id = crypto.randomUUID();
   const now = Date.now();
   const expiresAt = now + ACTION_EXPIRATION_MS;
@@ -145,6 +162,14 @@ export function registerPendingAction(params: {
 
   const confirmationToken = createSignedConfirmationToken(payload);
 
+  logAuditEvent({
+    userId: params.userId,
+    tenantId: params.tenantId,
+    action: params.action,
+    actionId: id,
+    status: "prepared",
+  });
+
   return {
     actionId: id,
     confirmationToken,
@@ -154,17 +179,25 @@ export function registerPendingAction(params: {
 
 /**
  * Validates that an action is valid, owned by the user, unexpired, and not yet consumed.
- * Consumes the action immediately to prevent replay attacks.
+ * Revalidates server policy and permissions, then consumes the action atomically to prevent replay attacks.
  */
-export function validateAndConsumeAction(
+export async function validateAndConsumeAction(
   actionId: string,
   userId: string,
   tenantId: string,
   token: string,
-): { valid: boolean; payload?: PendingActionPayload; error?: string } {
+): Promise<{ valid: boolean; payload?: PendingActionPayload; error?: string }> {
   // 1. Verify token signature and unexpired state
   const tokenVerification = verifyConfirmationToken(token);
   if (!tokenVerification.valid || !tokenVerification.payload) {
+    logAuditEvent({
+      userId,
+      tenantId,
+      action: "unknown",
+      actionId,
+      status: "rejected",
+      reason: tokenVerification.error || "Invalid token.",
+    });
     return { valid: false, error: tokenVerification.error || "Invalid confirmation token." };
   }
 
@@ -172,40 +205,118 @@ export function validateAndConsumeAction(
 
   // 2. ID consistency check
   if (payload.id !== actionId) {
+    logAuditEvent({
+      userId,
+      tenantId,
+      action: payload.action,
+      actionId,
+      status: "rejected",
+      reason: "Action ID mismatch.",
+    });
     return { valid: false, error: "Action ID mismatch." };
   }
 
   // 3. Strict User and Tenant boundary check
   if (payload.userId !== userId) {
+    logAuditEvent({
+      userId,
+      tenantId,
+      action: payload.action,
+      actionId,
+      status: "rejected",
+      reason: "User ownership mismatch.",
+    });
     return { valid: false, error: "Action does not belong to the authenticated user." };
   }
 
   if (payload.tenantId !== tenantId) {
+    logAuditEvent({
+      userId,
+      tenantId,
+      action: payload.action,
+      actionId,
+      status: "rejected",
+      reason: "Tenant authorization mismatch.",
+    });
     return { valid: false, error: "Tenant authorization mismatch." };
   }
 
-  // 4. Server-side replay prevention check
+  // 4. Server-Side Action Policy & User Permission Revalidation
+  const userPerms = await getUserPermissions(userId);
+  const policyCheck = isActionAllowed(payload.action, userPerms);
+  if (!policyCheck.allowed) {
+    logAuditEvent({
+      userId,
+      tenantId,
+      action: payload.action,
+      actionId,
+      status: "rejected",
+      reason: policyCheck.reason || "Action revoked by policy.",
+    });
+    return { valid: false, error: policyCheck.reason || "Action is not allowed by policy." };
+  }
+
+  // 5. Server-side replay prevention check & atomic consumption
   const record = actionStore.get(actionId);
   if (!record) {
-    // If action is not in store, treat as already expired or consumed
+    logAuditEvent({
+      userId,
+      tenantId,
+      action: payload.action,
+      actionId,
+      status: "rejected",
+      reason: "Action expired or record missing.",
+    });
     return { valid: false, error: "Action has expired or has already been executed." };
   }
 
   if (record.status === "consumed") {
+    logAuditEvent({
+      userId,
+      tenantId,
+      action: payload.action,
+      actionId,
+      status: "rejected",
+      reason: "Replay attack prevented: action already consumed.",
+    });
     return { valid: false, error: "Action has already been executed (replay prevented)." };
   }
 
   if (record.status === "cancelled") {
+    logAuditEvent({
+      userId,
+      tenantId,
+      action: payload.action,
+      actionId,
+      status: "rejected",
+      reason: "Action was cancelled.",
+    });
     return { valid: false, error: "Action was previously cancelled." };
   }
 
   if (record.userId !== userId || record.tenantId !== tenantId) {
+    logAuditEvent({
+      userId,
+      tenantId,
+      action: payload.action,
+      actionId,
+      status: "rejected",
+      reason: "Record ownership mismatch.",
+    });
     return { valid: false, error: "Action authorization mismatch." };
   }
 
-  // Mark action as consumed
+  // Mark action as consumed atomically
   record.status = "consumed";
   actionStore.set(actionId, record);
+
+  logAuditEvent({
+    userId,
+    tenantId,
+    action: payload.action,
+    actionId,
+    status: "confirmed",
+  });
 
   return { valid: true, payload };
 }
@@ -228,5 +339,14 @@ export function cancelPendingAction(
 
   record.status = "cancelled";
   actionStore.set(actionId, record);
+
+  logAuditEvent({
+    userId,
+    tenantId: record.tenantId,
+    action: record.action,
+    actionId,
+    status: "cancelled",
+  });
+
   return { success: true };
 }

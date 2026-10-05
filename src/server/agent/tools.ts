@@ -5,6 +5,8 @@ import { z } from "zod";
 import { READ_ONLY_OPERATIONS } from "./config";
 import { createGmailDraft, modifyGmailMessage } from "@/server/gmail";
 import { registerPendingAction } from "./action-security";
+import { isActionAllowed, getUserPermissions } from "./policy";
+import { logAuditEvent } from "./audit";
 import type {
   EmailActionPreview,
   TrashMessagePreview,
@@ -21,7 +23,7 @@ import {
 /**
  * Builds AI SDK compatible tools combining:
  * 1. Native READ-ONLY Corsair operations (scoped to the authenticated tenant)
- * 2. Low-risk direct tools (Draft creation, Label modification)
+ * 2. Low-risk direct tools (Draft creation, Label modification) with server policy checks
  * 3. High-impact staged action tools requiring user confirmation
  *
  * Guarantees strict tenant isolation and server-side authorization.
@@ -44,6 +46,12 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       execute: async (args: any) => {
         try {
+          const userPerms = await getUserPermissions(userId);
+          const policyCheck = isActionAllowed(corsairTool.operation, userPerms);
+          if (!policyCheck.allowed) {
+            return { error: policyCheck.reason || "Read operation not permitted by policy." };
+          }
+
           const result = await corsairTool.execute(args || {});
 
           // Enrich and normalize responses for LLM short-term context efficiency
@@ -127,7 +135,7 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
     });
   }
 
-  // 2. Low-Risk Direct Tool: Create Draft
+  // 2. Low-Risk Direct Tool: Create Draft (Checks server policy & user permission)
   tools["create_draft"] = tool({
     description:
       "Create an email draft in Gmail without sending it. Use this when the user asks to draft or compose an email.",
@@ -139,12 +147,33 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
     }),
     execute: async ({ to, subject, body, threadId }) => {
       try {
+        const userPerms = await getUserPermissions(userId);
+        const policyCheck = isActionAllowed("create_draft", userPerms);
+        if (!policyCheck.allowed) {
+          logAuditEvent({
+            userId,
+            tenantId,
+            action: "create_draft",
+            status: "rejected",
+            reason: policyCheck.reason,
+          });
+          return { success: false, error: policyCheck.reason };
+        }
+
         const draft = await createGmailDraft(tenantId, {
           to,
           subject,
           body,
           threadId,
         });
+
+        logAuditEvent({
+          userId,
+          tenantId,
+          action: "create_draft",
+          status: "executed",
+        });
+
         return {
           success: true,
           status: "draft_created",
@@ -154,12 +183,19 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
       } catch (error: unknown) {
         const message =
           error instanceof Error ? error.message : "Failed to create draft";
+        logAuditEvent({
+          userId,
+          tenantId,
+          action: "create_draft",
+          status: "failed",
+          error: message,
+        });
         return { success: false, error: message };
       }
     },
   });
 
-  // 3. Low-Risk Direct Tool: Modify Email (star, unstar, mark read/unread, archive)
+  // 3. Low-Risk Direct Tool: Modify Email (Checks server policy & user permission)
   tools["modify_email"] = tool({
     description:
       "Modify email labels such as marking as read/unread, starring/unstarring, or archiving.",
@@ -176,10 +212,31 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
     }),
     execute: async ({ id, addLabelIds, removeLabelIds }) => {
       try {
+        const userPerms = await getUserPermissions(userId);
+        const policyCheck = isActionAllowed("modify_email", userPerms);
+        if (!policyCheck.allowed) {
+          logAuditEvent({
+            userId,
+            tenantId,
+            action: "modify_email",
+            status: "rejected",
+            reason: policyCheck.reason,
+          });
+          return { success: false, error: policyCheck.reason };
+        }
+
         const res = await modifyGmailMessage(tenantId, id, {
           addLabelIds,
           removeLabelIds,
         });
+
+        logAuditEvent({
+          userId,
+          tenantId,
+          action: "modify_email",
+          status: "executed",
+        });
+
         return {
           success: true,
           message: "Email labels updated.",
@@ -188,6 +245,13 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
       } catch (error: unknown) {
         const message =
           error instanceof Error ? error.message : "Failed to modify email";
+        logAuditEvent({
+          userId,
+          tenantId,
+          action: "modify_email",
+          status: "failed",
+          error: message,
+        });
         return { success: false, error: message };
       }
     },
@@ -206,37 +270,43 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
       threadId: z.string().optional().describe("Thread ID if this is a reply in an existing thread"),
     }),
     execute: async ({ to, subject, body, cc, inReplyTo, threadId }) => {
-      const isReply = Boolean(inReplyTo || threadId);
-      const actionType = isReply ? "send_reply" : "send_email";
+      try {
+        const isReply = Boolean(inReplyTo || threadId);
+        const actionType = isReply ? "send_reply" : "send_email";
 
-      const preview: EmailActionPreview = {
-        action: actionType,
-        recipient: to,
-        cc,
-        subject,
-        body,
-        inReplyTo,
-        threadId,
-      };
+        const preview: EmailActionPreview = {
+          action: actionType,
+          recipient: to,
+          cc,
+          subject,
+          body,
+          inReplyTo,
+          threadId,
+        };
 
-      const pending = registerPendingAction({
-        userId,
-        tenantId,
-        action: actionType,
-        actionParams: { to, subject, body, cc, inReplyTo, threadId },
-        preview,
-      });
+        const pending = await registerPendingAction({
+          userId,
+          tenantId,
+          action: actionType,
+          actionParams: { to, subject, body, cc, inReplyTo, threadId },
+          preview,
+        });
 
-      return {
-        status: "requires_confirmation",
-        actionId: pending.actionId,
-        confirmationToken: pending.confirmationToken,
-        actionType,
-        preview,
-        message: isReply
-          ? `I've prepared your reply to ${to}. Please review and confirm below.`
-          : `I've prepared your email to ${to}. Please review and confirm below.`,
-      };
+        return {
+          status: "requires_confirmation",
+          actionId: pending.actionId,
+          confirmationToken: pending.confirmationToken,
+          actionType,
+          preview,
+          message: isReply
+            ? `I've prepared your reply to ${to}. Please review and confirm below.`
+            : `I've prepared your email to ${to}. Please review and confirm below.`,
+        };
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Failed to prepare send action.";
+        return { status: "rejected", error: message };
+      }
     },
   });
 
@@ -250,30 +320,36 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
       sender: z.string().optional().describe("Sender of the message"),
     }),
     execute: async ({ messageId, subject, sender }) => {
-      const preview: TrashMessagePreview = {
-        action: "trash_message",
-        messageId,
-        subject,
-        sender,
-        warning: "This will move the message to your Gmail Trash folder.",
-      };
+      try {
+        const preview: TrashMessagePreview = {
+          action: "trash_message",
+          messageId,
+          subject,
+          sender,
+          warning: "This will move the message to your Gmail Trash folder.",
+        };
 
-      const pending = registerPendingAction({
-        userId,
-        tenantId,
-        action: "trash_message",
-        actionParams: { messageId },
-        preview,
-      });
+        const pending = await registerPendingAction({
+          userId,
+          tenantId,
+          action: "trash_message",
+          actionParams: { messageId },
+          preview,
+        });
 
-      return {
-        status: "requires_confirmation",
-        actionId: pending.actionId,
-        confirmationToken: pending.confirmationToken,
-        actionType: "trash_message",
-        preview,
-        message: "I've prepared to move this email to the Trash. Please confirm below.",
-      };
+        return {
+          status: "requires_confirmation",
+          actionId: pending.actionId,
+          confirmationToken: pending.confirmationToken,
+          actionType: "trash_message",
+          preview,
+          message: "I've prepared to move this email to the Trash. Please confirm below.",
+        };
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Failed to prepare trash action.";
+        return { status: "rejected", error: message };
+      }
     },
   });
 
@@ -301,43 +377,49 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
       location,
       description,
     }) => {
-      const preview: CalendarCreatePreview = {
-        action: "create_calendar_event",
-        title: summary,
-        date,
-        start: startDateTime,
-        end: endDateTime,
-        timeZone,
-        attendees,
-        location,
-        description,
-      };
-
-      const attendeeObjects = attendees?.map((email) => ({ email }));
-
-      const pending = registerPendingAction({
-        userId,
-        tenantId,
-        action: "create_calendar_event",
-        actionParams: {
-          summary,
-          description,
+      try {
+        const preview: CalendarCreatePreview = {
+          action: "create_calendar_event",
+          title: summary,
+          date,
+          start: startDateTime,
+          end: endDateTime,
+          timeZone,
+          attendees,
           location,
-          start: { dateTime: startDateTime, timeZone },
-          end: { dateTime: endDateTime, timeZone },
-          attendees: attendeeObjects,
-        },
-        preview,
-      });
+          description,
+        };
 
-      return {
-        status: "requires_confirmation",
-        actionId: pending.actionId,
-        confirmationToken: pending.confirmationToken,
-        actionType: "create_calendar_event",
-        preview,
-        message: `I've prepared to schedule "${summary}" on ${date}. Please review and confirm below.`,
-      };
+        const attendeeObjects = attendees?.map((email) => ({ email }));
+
+        const pending = await registerPendingAction({
+          userId,
+          tenantId,
+          action: "create_calendar_event",
+          actionParams: {
+            summary,
+            description,
+            location,
+            start: { dateTime: startDateTime, timeZone },
+            end: { dateTime: endDateTime, timeZone },
+            attendees: attendeeObjects,
+          },
+          preview,
+        });
+
+        return {
+          status: "requires_confirmation",
+          actionId: pending.actionId,
+          confirmationToken: pending.confirmationToken,
+          actionType: "create_calendar_event",
+          preview,
+          message: `I've prepared to schedule "${summary}" on ${date}. Please review and confirm below.`,
+        };
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Failed to prepare event creation.";
+        return { status: "rejected", error: message };
+      }
     },
   });
 
@@ -369,48 +451,54 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
       description,
       originalTitle,
     }) => {
-      const preview: CalendarUpdatePreview = {
-        action: "update_calendar_event",
-        eventId,
-        title: summary,
-        date: date || "Updated Date",
-        start: startDateTime || "",
-        end: endDateTime || "",
-        timeZone,
-        attendees,
-        location,
-        description,
-        originalTitle,
-      };
-
-      const start = startDateTime ? { dateTime: startDateTime, timeZone } : undefined;
-      const end = endDateTime ? { dateTime: endDateTime, timeZone } : undefined;
-      const attendeeObjects = attendees?.map((email) => ({ email }));
-
-      const pending = registerPendingAction({
-        userId,
-        tenantId,
-        action: "update_calendar_event",
-        actionParams: {
+      try {
+        const preview: CalendarUpdatePreview = {
+          action: "update_calendar_event",
           eventId,
-          summary,
-          description,
+          title: summary,
+          date: date || "Updated Date",
+          start: startDateTime || "",
+          end: endDateTime || "",
+          timeZone,
+          attendees,
           location,
-          start,
-          end,
-          attendees: attendeeObjects,
-        },
-        preview,
-      });
+          description,
+          originalTitle,
+        };
 
-      return {
-        status: "requires_confirmation",
-        actionId: pending.actionId,
-        confirmationToken: pending.confirmationToken,
-        actionType: "update_calendar_event",
-        preview,
-        message: `I've prepared to update the event "${summary || originalTitle || eventId}". Please review and confirm below.`,
-      };
+        const start = startDateTime ? { dateTime: startDateTime, timeZone } : undefined;
+        const end = endDateTime ? { dateTime: endDateTime, timeZone } : undefined;
+        const attendeeObjects = attendees?.map((email) => ({ email }));
+
+        const pending = await registerPendingAction({
+          userId,
+          tenantId,
+          action: "update_calendar_event",
+          actionParams: {
+            eventId,
+            summary,
+            description,
+            location,
+            start,
+            end,
+            attendees: attendeeObjects,
+          },
+          preview,
+        });
+
+        return {
+          status: "requires_confirmation",
+          actionId: pending.actionId,
+          confirmationToken: pending.confirmationToken,
+          actionType: "update_calendar_event",
+          preview,
+          message: `I've prepared to update the event "${summary || originalTitle || eventId}". Please review and confirm below.`,
+        };
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Failed to prepare event update.";
+        return { status: "rejected", error: message };
+      }
     },
   });
 
@@ -424,32 +512,39 @@ export function buildAgentTools(tenantId: string, userId: string): ToolSet {
       date: z.string().optional().describe("Date of the event being deleted"),
     }),
     execute: async ({ eventId, summary, date }) => {
-      const preview: CalendarDeletePreview = {
-        action: "delete_calendar_event",
-        eventId,
-        title: summary,
-        date,
-        warning: "This will permanently remove the event from your Google Calendar.",
-      };
+      try {
+        const preview: CalendarDeletePreview = {
+          action: "delete_calendar_event",
+          eventId,
+          title: summary,
+          date,
+          warning: "This will permanently remove the event from your Google Calendar.",
+        };
 
-      const pending = registerPendingAction({
-        userId,
-        tenantId,
-        action: "delete_calendar_event",
-        actionParams: { eventId },
-        preview,
-      });
+        const pending = await registerPendingAction({
+          userId,
+          tenantId,
+          action: "delete_calendar_event",
+          actionParams: { eventId },
+          preview,
+        });
 
-      return {
-        status: "requires_confirmation",
-        actionId: pending.actionId,
-        confirmationToken: pending.confirmationToken,
-        actionType: "delete_calendar_event",
-        preview,
-        message: `I've prepared to delete "${summary || 'this event'}". Please confirm below.`,
-      };
+        return {
+          status: "requires_confirmation",
+          actionId: pending.actionId,
+          confirmationToken: pending.confirmationToken,
+          actionType: "delete_calendar_event",
+          preview,
+          message: `I've prepared to delete "${summary || 'this event'}". Please confirm below.`,
+        };
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Failed to prepare event deletion.";
+        return { status: "rejected", error: message };
+      }
     },
   });
 
   return tools;
 }
+

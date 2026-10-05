@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     const tenantId = getTenantId(session.user.id);
 
     // 6. Validate token signature, expiration, user ownership, and replay protection
-    const validation = validateAndConsumeAction(
+    const validation = await validateAndConsumeAction(
       actionId,
       session.user.id,
       tenantId,

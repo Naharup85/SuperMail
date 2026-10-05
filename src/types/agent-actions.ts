@@ -2,6 +2,19 @@
  * Agent Actions and Confirmation Types for SuperMail Phase 11.
  */
 
+export type ActionRiskLevel = "LOW" | "MEDIUM" | "HIGH" | "DESTRUCTIVE" | "BLOCKED";
+
+export type AgentPermissionKey =
+  | "gmail.read"
+  | "gmail.draft"
+  | "gmail.modify"
+  | "gmail.send"
+  | "gmail.trash"
+  | "calendar.read"
+  | "calendar.create"
+  | "calendar.update"
+  | "calendar.delete";
+
 export type HighImpactActionType =
   | "send_email"
   | "send_reply"
@@ -12,9 +25,30 @@ export type HighImpactActionType =
 
 export type LowRiskActionType =
   | "create_draft"
-  | "modify_message";
+  | "modify_message"
+  | "modify_email";
 
-export type AgentActionType = HighImpactActionType | LowRiskActionType;
+export type BlockedActionType =
+  | "permanent_email_delete"
+  | "permanent_calendar_purge";
+
+export type AgentActionType =
+  | HighImpactActionType
+  | LowRiskActionType
+  | BlockedActionType;
+
+export interface ActionPolicyDefinition {
+  action: AgentActionType | string;
+  name: string;
+  provider: "gmail" | "googlecalendar";
+  riskLevel: ActionRiskLevel;
+  allowed: boolean;
+  requiresConfirmation: boolean;
+  isDestructive: boolean;
+  isReversible: boolean;
+  requiredPermission: AgentPermissionKey | null;
+  description: string;
+}
 
 export interface EmailActionPreview {
   action: "send_email" | "send_reply";
@@ -126,4 +160,11 @@ export interface ActionExecutionResponse {
   message: string;
   error?: string;
   data?: unknown;
+}
+
+export interface AgentPermissionsResponse {
+  userId: string;
+  tenantId: string;
+  permissions: Record<AgentPermissionKey, boolean>;
+  policies: ActionPolicyDefinition[];
 }
