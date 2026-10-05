@@ -1,41 +1,118 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ================================
+# Dependencies
+# ================================
+node_modules/
+.pnpm-store/
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# ================================
+# Next.js
+# ================================
+.next/
+out/
+.vercel/
 
-# testing
-/coverage
+# ================================
+# Production
+# ================================
+dist/
+build/
 
-# next.js
-/.next/
-/out/
+# ================================
+# Environment / Secrets
+# ================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# production
-/build
+# Keep example environment file
+!.env.example
 
-# misc
-.DS_Store
-*.pem
+# ================================
+# TypeScript
+# ================================
+*.tsbuildinfo
 
-# debug
+# ================================
+# Logs
+# ================================
+*.log
+logs/
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env
+# ================================
+# Testing / Coverage
+# ================================
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
 
-# vercel
-.vercel
+# ================================
+# IDE / Editors
+# ================================
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# ================================
+# OS
+# ================================
+Thumbs.db
+
+# ================================
+# Temporary files
+# ================================
+tmp/
+temp/
+*.tmp
+*.temp
+
+# ================================
+# Certificates / Private Keys
+# ================================
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# IMPORTANT:
+# If certs/ca.pem is required locally for PostgreSQL,
+# keep the directory but do NOT commit the private certificate.
+certs/*.pem
+
+# ================================
+# Local databases
+# ================================
+*.sqlite
+*.sqlite3
+*.db
+
+# ================================
+# Generated files
+# ================================
+.turbo/
+.cache/
+
+# ================================
+# Debug / profiling
+# ================================
+*.cpuprofile
+*.heapsnapshot
+
+# ================================
+# Misc
+# ================================
+*.orig
+*.rej
